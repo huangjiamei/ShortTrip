@@ -8,10 +8,13 @@ import com.example.dao.*;
 import com.example.dao.RequestBody;
 import com.example.dao.ResponseBody;
 import com.example.service.HttpRequest;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import net.sourceforge.pinyin4j.PinyinHelper;
+import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
+import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
 import org.json.JSONArray;
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +26,8 @@ import java.util.regex.Pattern;
 
 @RestController //告诉Spring以字符串的形式渲染结果，并直接返回给调用者
 public class HelloController {
-    final String urlPath = "http://59.110.30.187:8888/syncTasks";
+    final String urlPath = "http://59.110.30.187:8888/syncTasks"; //北京
+    //final String urlPath = "http://http://101.201.209.101:3000/syncTasks"; //天津
     final String pkgNameQ = "com.qunar.travelplan";
     final String pkgNameY = "com.yaochufa.app";
     final String versionNameQ = "5.4.0";
@@ -38,15 +42,10 @@ public class HelloController {
     private VoiceBoxLocation voiceBoxLocation;
     @RequestMapping("/skills/short_trip")
     public ResponseBody Test(@org.springframework.web.bind.annotation.RequestBody RequestBody requestBody) {
-        //getAttractionIntroduction("231");
         cityList = getCityList(); //推荐的城市列表
         for(int i=0; i<cityList.size(); i++) {
             cities = cities + cityList.get(i).getCityName();
         }
-        //getRecommendedDestination("120100"); //要出发天津
-        //getRecommendedDestination("299914"); //去哪儿网北京
-        //getRecommendedDestination("110100"); //要出发北京
-
         ResponseBody responseBody = new ResponseBody(); //返回应答包体
         responseBody.setVersionid("1.0");
         responseBody.setSequence(requestBody.getSequence());
@@ -62,8 +61,10 @@ public class HelloController {
             Map<String, String> slots = getIntent(requestBody.getInput_text());
 
             logger.debug(slots.get("operation"));
+
+            //直接使用技能
             if(slots.get("operation").equals("oneSentence")) {
-                responseBody.setIs_end(true); //false表示本次会话还未完成
+                responseBody.setIs_end(false); //false表示本次会话还未完成
                 DirectiveItems directiveItems = new DirectiveItems();
                 directiveItems.setType("1"); //类型1为TTS播报内容，2为AUDIO的url连接
                 //获取地理位置
@@ -101,13 +102,13 @@ public class HelloController {
                                 attractions = attractions + "、" + sightList.get(i).getSightName() + "、";
                         }
 
-                        String s2 = "现有以下景点推荐：" + attractions;
+                        String s2 = "现有以下景点推荐：" + attractions + "您想查询哪个景点的信息呢？或者您可以这样说，让芭乐周边游帮我查一下公园类景点";
                         s = s1 + s2;
                     } else
-                        s = "好的，由于系统无法获取您当前所在的位置，请问您现在在哪个城市或者想查哪个城市呢";
+                        s = "好的，由于系统无法获取您当前所在的位置，请问您现在在哪个城市或者想查哪个城市呢？您可以这样说，让芭乐周边游帮我查一下北京市的景点。";
                 }
                 else
-                    s = "好的，由于系统无法获取您当前所在的位置，请问您现在在哪个城市或者想查哪个城市呢";
+                    s = "好的，由于系统无法获取您当前所在的位置，请问您现在在哪个城市或者想查哪个城市呢？您可以这样说，让芭乐周边游帮我查一下北京市的景点";
                 logger.debug(s);
 
                 directiveItems.setContent(s); //播报内容
@@ -117,11 +118,13 @@ public class HelloController {
 
             }
 
-            else if(slots.get("operation").equals("open")) {
 
+            //先唤醒技能
+            else if(slots.get("operation").equals("open")) {
                 responseBody.setIs_end(false); //false表示本次会话还未完成
                 DirectiveItems directiveItems = new DirectiveItems();
                 directiveItems.setType("1"); //类型1为TTS播报内容，2为AUDIO的url连接
+/*
                 //获取地理位置
                 map.put("cityName", "");
                 Gson gson = new Gson();
@@ -145,17 +148,21 @@ public class HelloController {
                 }
                 else
                     s = "好的，由于系统无法获取您当前所在的位置，请问您现在在哪个城市或者想查哪个城市呢";
+*/
+                String s = "芭乐周边游已打开，您可以这样说，让芭乐周边游帮我查一下附近有什么好玩的。";
 
                 directiveItems.setContent(s); //播报内容
                 DirectiveItems[] directiveItemses = new DirectiveItems[1]; //播报的内容的条数，根据顺序播报
                 directiveItemses[0] = directiveItems;
                 directive.setDirective_items(directiveItemses);
             }
+
+
             else if(slots.get("operation").equals("findLocal") || slots.get("operation").equals("getLocal")) {
 
                 if(slots.get("operation").equals("getLocal"))
                     map.put("cityName", slots.get("localCity"));
-
+                logger.debug(map.get("cityName"));
                     //查询本市景点
                     //调用getAttractionList接口
                     responseBody.setIs_end(false); //查询后不结束会话
@@ -163,7 +170,7 @@ public class HelloController {
 
                     DirectiveItems directiveItems = new DirectiveItems();
                     directiveItems.setType("1");
-                    directiveItems.setContent(map.get("cityName") + "市内有以下景点推荐");
+                    directiveItems.setContent(map.get("cityName") + "市内有以下景点推荐：");
                     directiveItemses[0] = directiveItems;
 
                     DirectiveItems directiveItems1 = new DirectiveItems();
@@ -198,12 +205,13 @@ public class HelloController {
                             attractions = attractions + "、" + sightList.get(i).getSightName() + "、";
                     }
 
-                    directiveItems1.setContent(attractions);
+                    directiveItems1.setContent(attractions + "您想查询哪个景点的信息呢？或者您可以这样说，让芭乐周边游帮我查一下公园类景点");
                     directiveItems1.setType("1");
                     directiveItemses[1] = directiveItems1;
                     directive.setDirective_items(directiveItemses);
 
             }
+
 
             else if(attractions.contains(slots.get("operation"))) {
                 //获取景点详细信息
@@ -242,7 +250,7 @@ public class HelloController {
                     detail = getAttractionDetail(cityId, attractionId);
                 if(!cityCode.equals(""))
                     introduction = getAttractionIntroduction(cityCode);
-                detailAndIntroduction = detail + introduction;
+                detailAndIntroduction = detail + introduction + "您可以这样说，该景点有什么注意事项吗或者该景点的具体地址是什么？";
                 directiveItems.setContent(detailAndIntroduction);
 
                 directiveItemses[0] = directiveItems;
@@ -265,9 +273,9 @@ public class HelloController {
                     }
                 }
                 if(!cityId.equals("") && !attractionId.equals(""))
-                    directiveItems.setContent("该景点的注意事项如下：" + getAttention(cityId, attractionId));
+                    directiveItems.setContent("该景点的注意事项如下：" + getAttention(cityId, attractionId) + "，您还可以问，该景点的具体地址是什么");
                 else
-                    directiveItems.setContent("该景点暂无注意事项");
+                    directiveItems.setContent("该景点暂无注意事项" + "，您还可以问，该景点的具体地址是什么");
                 directiveItemses[0] = directiveItems;
                 directive.setDirective_items(directiveItemses);
             }
@@ -278,7 +286,7 @@ public class HelloController {
 
                 DirectiveItems directiveItems = new DirectiveItems();
                 directiveItems.setType("1");
-                directiveItems.setContent(tag + "类有以下景点推荐");
+                directiveItems.setContent(tag + "类有以下景点推荐：");
                 directiveItemses[0] = directiveItems;
 
                 DirectiveItems directiveItems1 = new DirectiveItems();
@@ -290,7 +298,7 @@ public class HelloController {
                     attractions = attractions + locallist.get(i).getName() + "、";
                 }
 
-                directiveItems1.setContent(attractions);
+                directiveItems1.setContent(attractions + "您想查询哪个景点的信息呢？");
                 directiveItems1.setType("1");
                 directiveItemses[1] = directiveItems1;
                 directive.setDirective_items(directiveItemses);
@@ -307,9 +315,9 @@ public class HelloController {
                         sightId = sightList.get(i).getSightId();
                 }
                 if(!sightId.equals(""))
-                    address = getAttractionAddress(sightId);
+                    address = "该景点的地址信息如下：" + getAttractionAddress(sightId) + "，您还可以问，该景点有什么注意事项吗";
                 else
-                    address = "该景点暂无地址信息";
+                    address = "该景点暂无地址信息" + "，您还可以问，该景点有什么注意事项吗";
                 directiveItems.setContent(address);
                 directiveItemses[0] = directiveItems;
                 directive.setDirective_items(directiveItemses);
@@ -347,37 +355,36 @@ public class HelloController {
         Map<String, String> intent = new HashMap<>();
         input_text = input_text.replaceAll("\\pP", ""); //正则处理去掉句号
 
-        final String oneSentence = "(让|请)?(打开|进入|启动)?(芭乐周边游)?(给|替|帮)?(我|俺)?(推荐)?(|查|搜|看)?(搜索)?(看看)?(查查)?(一)?(下)?" +
+        final String oneSentence = "(让|请)?(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?(周边游)?(给|替|帮)?(我|俺)?(推荐)?(|查|搜|看)?(搜索)?(看看)?(查查)?(一)?(下)?" +
                 "(附近)?(有)?(啥|什么)?(好玩)?(的)?(地方|景点)?";
 
-        //final String open = "(打开|进入|启动).*芭乐周边游";
+        final String open = "(打开|进入|启动).*(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?周边游";
 
         //final String findLocal = "(芭乐周边游)?(给|替|帮)(我)?推荐(一)?(下)?(附近)?(有)?(啥|什么)?好玩的(地方)?";
 
         //final String getLocal = ".*(市)";
-        final String findCity = "(芭乐周边游)?(给|帮|替)(我)?(想|要|在)?(去|查|搜索)?(一)?(下)?" +
-                "(?<city>.+?)" + "(市)?(的)?(景点)?";
-
         final String attraction = input_text;
 
-        final String attention = "(芭乐周边游)?(有)?(什么)?注意事项(吗)?";
+
+        final String findCity = "(让|请)?(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?(周边游)?(给|帮|替)?(我)?(想|要|在)?(去|查|搜索)?(一)?(下)" +
+                "(?<city>.*?)" + "市(的)?(景点)?";
+
+        final String attention = "(让|请)?(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?(周边游)?(该)?(景点)?(有)?(什么)?(需要)?(注意|提醒)?(的)?(事项)?(吗)?";
 
         //final String search = "搜索";
-        final String search = "(芭乐周边游)?(给|帮|替)?(我)?(搜|查)?(索)?(一)?(下)?" +
-                "(?<sight>.+?)" + "类(的)?(景点)?";
+        final String search = "(让|请)?(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?(周边游)?(给|帮|替)?(我)?(搜|查)?(索)?(一)?(下)" +
+                "(?<sight>.*?)" + "类(的)?(景点)?";
 
-        final String findAddress = "(芭乐周边游)?具体地址(是什么)?";
+        final String findAddress = "(让|请)?(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?(周边游)?(该)?(景点)?(它)?(的)?具体地址(是什么)?(呢)?";
 
-        final String stop = "(芭乐周边游)?(停|别说话|好了|够了)";
+        final String stop = "(让|请)?(芭乐|扒乐|八乐|芭了|扒了|八了|拔乐|拔了)?(周边游)?(停|别说话|好了|够了)";
 
         if(input_text.matches(oneSentence))
             intent.put("operation", "oneSentence");
 
-
-/*
         else if(input_text.matches(open))
             intent.put("operation", "open");
-
+/*
         else if(input_text.matches(findLocal))
             intent.put("operation", "findLocal");
 */
@@ -392,14 +399,7 @@ public class HelloController {
             intent.put("localCity", input_text.substring(0, input_text.length()-1));
         }
         */
-        else if(input_text.matches(findCity)) {
-            intent.put("operation", "getLocal");
-            Pattern pattern = Pattern.compile(findCity);
-            Matcher matcher = pattern.matcher(input_text);
-            while (matcher.find()) {
-                intent.put("localCity", matcher.group("city"));
-            }
-        }
+
 
         else if(attractions.contains(attraction)) {
             intent.put("operation", attraction);
@@ -407,6 +407,19 @@ public class HelloController {
 
         else if(input_text.matches(attention))
             intent.put("operation", "attention");
+
+        else if(input_text.matches(findAddress))
+            intent.put("operation", "findAddress");
+
+        else if(input_text.matches(findCity)) {
+            intent.put("operation", "getLocal");
+            Pattern pattern = Pattern.compile(findCity);
+            Matcher matcher = pattern.matcher(input_text);
+            while (matcher.find()) {
+                intent.put("localCity", matcher.group("city"));
+                //logger.debug(matcher.group());
+            }
+        }
 
         /*
         else if(input_text.contains(search)) {
@@ -423,8 +436,7 @@ public class HelloController {
             }
         }
 
-        else if(input_text.matches(findAddress))
-            intent.put("operation", "findAddress");
+
 
         else if(input_text.matches(stop))
             intent.put("operation", "stop");
